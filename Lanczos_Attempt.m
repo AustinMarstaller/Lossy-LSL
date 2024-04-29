@@ -6,7 +6,31 @@ n=10;
 A = generateSPDmatrix(n);
 b = rand(n,1); % vector of length n = 10
 [Q,alpha,beta] = Lanczos(A,b,n);
-full(Q' * A * Q) % Verify T = Q' A Q
+%full(Q' * A * Q) % Verify T = Q' A Q
+% Also check Q^T Q = Identity
+%full(Q' * Q)
+
+%% Synthetic data construction
+M=9; % M+1 total grid points
+h=1/M; % Grid point spacing. Implement h^hats
+x=(0:h:1)'; % Lattice in column vector
+
+% p = Shifted gaussian centered witihn the domain. Divide by sigma^2
+p = exp(-x.^2); % p = 0 for reference problem
+p_reference = zeros(M+1,1);
+lambda = 1:5; % Values of lambda to use. Match paper values
+
+% Store solution vectors per lambda in a matrix
+u_lambda           = zeros(M+1,numel(lambda)); 
+u_lambda_reference = zeros(M+1,numel(lambda)); 
+
+for j = 1:numel(lambda)
+    % Each column is a solution for a particular value of lambda
+    u_lambda(:,j) = LSL_FD(M,p,x,h,lambda(j));
+    u_lambda_reference(:,j) = LSL_FD(M,p_reference,x,h,lambda(j));
+end
+
+%% Mass & Stiffness M = <u_i,u_j>, S = <u,Au>
 
 function [Q, alpha, beta] = Lanczos(A,b,iter)
     %% Some initialization
