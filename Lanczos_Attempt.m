@@ -16,9 +16,11 @@ h=1/M; % Grid point spacing. Implement h^hats
 x=(0:h:1)'; % Lattice in column vector
 
 % p = Shifted gaussian centered witihn the domain. Divide by sigma^2
-p = exp(-x.^2); % p = 0 for reference problem
+mu = 0.35;
+sigma = 0.27;
+p = exp(-(x-mu).^2 / sigma^2); % p = 0 for reference problem
 p_reference = zeros(M+1,1);
-lambda = 1:5; % Values of lambda to use. Match paper values
+lambda = [2,4,6,8,16,32,48];
 
 % Store solution vectors per lambda in a matrix
 u_lambda           = zeros(M+1,numel(lambda)); 
