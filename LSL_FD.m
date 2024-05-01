@@ -1,6 +1,6 @@
 %% Finite difference scheme to solve the BVP: -u'' + (p(x) + lambda)u = g(x), u'(0)=-1, u'(1)=0
 % Suppose g(x) = delta(x)
-% Suppose p(x) = exp(-x^2)
+% Suppose p(x) = exp(-(x-mu)^2/sigma^2)
 
 function [u] = LSL_FD(M,p,x,h,lambda)
     % Construct the M-by-M matrix A

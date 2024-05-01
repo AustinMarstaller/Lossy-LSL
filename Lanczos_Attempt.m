@@ -31,6 +31,14 @@ for j = 1:numel(lambda)
     u_lambda(:,j) = LSL_FD(M,p,x,h,lambda(j));
     u_lambda_reference(:,j) = LSL_FD(M,p_reference,x,h,lambda(j));
 end
+%% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
+F = u_lambda(1,:);
+F_reference = u_lambda_reference(1,:);
+
+dF_dlambda = zeros(1,numel(lambda));
+for j = 1:numel(lambda)
+    dF_dlambda(j) = u_lambda(:,j)' * u_lambda(:,j);
+end
 
 %% Mass & Stiffness M = <u_i,u_j>, S = <u,Au>
 
