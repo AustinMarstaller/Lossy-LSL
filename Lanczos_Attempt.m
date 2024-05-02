@@ -22,52 +22,55 @@ p_reference = zeros(M+1,1);
 lambda = [2,4,6,8,16,32,48];
 
 %% Store solution vectors per lambda in a matrix
-u_lambda           = zeros(M+1,numel(lambda)); 
+u_lambda           = zeros(M+1,numel(lambda)); % [u(x; lambda_1) | ... | u(x; lambda_2024)]
 u_lambda_reference = zeros(M+1,numel(lambda)); 
 
 for j = 1:numel(lambda)
     % Each column is a solution for a particular value of lambda
-    u_lambda(:,j) = LSL_FD(M,p,x,h,lambda(j));
+    u_lambda(:,j) = LSL_FD(M,p,x,h,lambda(j)); % (u_j(0), u_j(1), ..., u_j(M))^T
     u_lambda_reference(:,j) = LSL_FD(M,p_reference,x,h,lambda(j));
 end
 
 %% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
-F = u_lambda(1,:);
+F = u_lambda(1,:); % u(0, lambda_i)
 F_reference = u_lambda_reference(1,:);
 
 dF_dlambda = zeros(1,numel(lambda));
-for j = 1:numel(lambda)
-    dF_dlambda(j) = u_lambda(:,j)' * u_lambda(:,j);
+for i = 1:numel(lambda)
+    % dF/dlambda = u^T u
+    dF_dlambda(i) = u_lambda(:,i)' * u_lambda(:,i);
 end
 
-%% Mass & Stiffness M = <u_i,u_j>, S = <u,Au>
-% M & S are symmetric: M(i,j) = M(j,i) & S(i,j) = S(j,i)
-M = zeros(numel(lambda), numel(lambda));
-S = zeros(numel(lambda), numel(lambda));
+%% Mass & Stiffness matrices
+% M & S are symmetric
+Mass      = -diag(dF_dlambda);
+Stiffness = diag(dF_dlambda);
 
 for i = 1:numel(lambda)
-
-    M(i,i) = -dF_dlambda(i);
-    S(i,i) = dF_dlambda(i);
-
     for j = i+1:numel(lambda)
-        M(i,j) = (F(i) - F(j))/(lambda(j) - lambda(i));
-        S(i,j) = (F(j)*lambda(j) - F(i)*lambda(i))/(lambda(j) - lambda(i));
+        Mass(i,j) = (F(i) - F(j))/(lambda(j) - lambda(i));
+        Stiffness(i,j) = (F(j)*lambda(j) - F(i)*lambda(i))/(lambda(j) - lambda(i));
     end
 end
-M = M + M'; 
-S = S + S';
+Mass = Mass+ Mass'; 
+Stiffness = Stiffness + Stiffness';
 
-%% Benchmark test: D = diag(h_1^, ..., h_n^)
+%% Benchmark test: D = diag(h_0^, ..., h_(M)^): !! issue here !!
 % M(i,j) ?= u_i^T D u_j,
 % S(i,j) ?= u_i^T D A u_j
 
-benchmark_M = M*0;
-benchmark_S = S*0;
+benchmark_Mass = Mass*0;
+benchmark_Stiffness = Stiffness*0;
+
+D = ones(1,M+1)*h;
+D(1) = h/2;
+D(end) = h/2;
+D = diag(D);
 
 for i = 1:numel(lambda)
     for j = 1:numel(lambda)
-        M(i,j) = u_lambda(:,i)' *  
+        benchmark_Mass(i,j) = u_lambda(:,i)' * D * u_lambda(:,j);
+        benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * A * u_lambda(:,j);
     end
 end
 
