@@ -15,14 +15,13 @@ M=9; % M+1 total grid points
 h=1/M; % Grid point spacing. Implement h^hats
 x=(0:h:1)'; % Lattice in column vector
 
-% p = Shifted gaussian centered witihn the domain. Divide by sigma^2
 mu = 0.35;
 sigma = 0.27;
 p = exp(-(x-mu).^2 / sigma^2); % p = 0 for reference problem
 p_reference = zeros(M+1,1);
 lambda = [2,4,6,8,16,32,48];
 
-% Store solution vectors per lambda in a matrix
+%% Store solution vectors per lambda in a matrix
 u_lambda           = zeros(M+1,numel(lambda)); 
 u_lambda_reference = zeros(M+1,numel(lambda)); 
 
@@ -31,6 +30,7 @@ for j = 1:numel(lambda)
     u_lambda(:,j) = LSL_FD(M,p,x,h,lambda(j));
     u_lambda_reference(:,j) = LSL_FD(M,p_reference,x,h,lambda(j));
 end
+
 %% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
 F = u_lambda(1,:);
 F_reference = u_lambda_reference(1,:);
@@ -41,6 +41,35 @@ for j = 1:numel(lambda)
 end
 
 %% Mass & Stiffness M = <u_i,u_j>, S = <u,Au>
+% M & S are symmetric: M(i,j) = M(j,i) & S(i,j) = S(j,i)
+M = zeros(numel(lambda), numel(lambda));
+S = zeros(numel(lambda), numel(lambda));
+
+for i = 1:numel(lambda)
+
+    M(i,i) = -dF_dlambda(i);
+    S(i,i) = dF_dlambda(i);
+
+    for j = i+1:numel(lambda)
+        M(i,j) = (F(i) - F(j))/(lambda(j) - lambda(i));
+        S(i,j) = (F(j)*lambda(j) - F(i)*lambda(i))/(lambda(j) - lambda(i));
+    end
+end
+M = M + M'; 
+S = S + S';
+
+%% Benchmark test: D = diag(h_1^, ..., h_n^)
+% M(i,j) ?= u_i^T D u_j,
+% S(i,j) ?= u_i^T D A u_j
+
+benchmark_M = M*0;
+benchmark_S = S*0;
+
+for i = 1:numel(lambda)
+    for j = 1:numel(lambda)
+        M(i,j) = u_lambda(:,i)' *  
+    end
+end
 
 function [Q, alpha, beta] = Lanczos(A,b,iter)
     %% Some initialization
