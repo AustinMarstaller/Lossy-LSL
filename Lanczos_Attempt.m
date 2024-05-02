@@ -1,4 +1,6 @@
-%% Lanzcos Iteration: following Trefethen
+clear all
+close all
+%% Lanzcos Iteration: 
 % alpha = main diagonal, beta = super/sub diagonal
 % A = Q T_n Q*
 
@@ -31,15 +33,23 @@ for j = 1:numel(lambda)
     u_lambda_reference(:,j) = LSL_FD(M,p_reference,x,h,lambda(j));
 end
 
+
+
+D = ones(1,M+1)*h;
+%D(1) = h/2;
+%D(end) = h/2;
+D = eye(M+1);
+
 %% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
 F = u_lambda(1,:); % u(0, lambda_i)
 F_reference = u_lambda_reference(1,:);
 
 dF_dlambda = zeros(1,numel(lambda));
 for i = 1:numel(lambda)
-    % dF/dlambda = u^T u
-    dF_dlambda(i) = u_lambda(:,i)' * u_lambda(:,i);
+    % dF/dlambda = -u^T D u
+    dF_dlambda(i) = -u_lambda(:,i)' * D * u_lambda(:,i);
 end
+
 
 %% Mass & Stiffness matrices
 % M & S are symmetric
@@ -47,33 +57,31 @@ Mass      = -diag(dF_dlambda);
 Stiffness = diag(dF_dlambda);
 
 for i = 1:numel(lambda)
-    for j = i+1:numel(lambda)
-        Mass(i,j) = (F(i) - F(j))/(lambda(j) - lambda(i));
-        Stiffness(i,j) = (F(j)*lambda(j) - F(i)*lambda(i))/(lambda(j) - lambda(i));
+    for j = 1:numel(lambda)
+        if j ~= i
+            Mass(i,j) = (F(i) - F(j))/(lambda(j) - lambda(i));
+            Stiffness(i,j) = (F(j)*lambda(j) - F(i)*lambda(i))/(lambda(j) - lambda(i));
+        end
     end
 end
-Mass = Mass+ Mass'; 
-Stiffness = Stiffness + Stiffness';
 
-%% Benchmark test: D = diag(h_0^, ..., h_(M)^): !! issue here !!
+
+%% Benchmark test: D = diag(h_0^, ..., h_(M)^): 
 % M(i,j) ?= u_i^T D u_j,
 % S(i,j) ?= u_i^T D A u_j
 
 benchmark_Mass = Mass*0;
 benchmark_Stiffness = Stiffness*0;
 
-D = ones(1,M+1)*h;
-D(1) = h/2;
-D(end) = h/2;
-D = diag(D);
 
 for i = 1:numel(lambda)
     for j = 1:numel(lambda)
         benchmark_Mass(i,j) = u_lambda(:,i)' * D * u_lambda(:,j);
-        benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * A * u_lambda(:,j);
+        benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * A * u_lambda(:,j); % A is SPD
     end
 end
 
+%% Lanczos algorithm
 function [Q, alpha, beta] = Lanczos(A,b,iter)
     %% Some initialization
     [row, col] = size(b);
