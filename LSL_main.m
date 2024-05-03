@@ -1,17 +1,6 @@
 clear all
 close all
-%% Lanzcos Iteration: 
-% alpha = main diagonal, beta = super/sub diagonal
-% A = Q T_n Q*
-
-n=10;
-A = generateSPDmatrix(n);
-b = rand(n,1); % vector of length n = 10
-[Q,alpha,beta] = Lanczos(A,b,n);
-%full(Q' * A * Q) % Verify T = Q' A Q
-% Also check Q^T Q = Identity
-%full(Q' * Q)
-
+tic
 %% Synthetic data construction
 M=9; % M+1 total grid points
 h=1/M; % Grid point spacing. Implement h^hats
@@ -29,16 +18,14 @@ u_lambda_reference = zeros(M+1,numel(lambda));
 
 for j = 1:numel(lambda)
     % Each column is a solution for a particular value of lambda
-    u_lambda(:,j) = LSL_FD(M,p,x,h,lambda(j)); % (u_j(0), u_j(1), ..., u_j(M))^T
-    u_lambda_reference(:,j) = LSL_FD(M,p_reference,x,h,lambda(j));
+    [u_lambda(:,j),A] = LSL_FD(M,p,x,h,lambda(j)); % (u_j(0), u_j(1), ..., u_j(M))^T
+    [u_lambda_reference(:,j),C] = LSL_FD(M,p_reference,x,h,lambda(j));
 end
 
-
-
 D = ones(1,M+1)*h;
-%D(1) = h/2;
-%D(end) = h/2;
-D = eye(M+1);
+D(1) = h/2;
+D(end) = h/2;
+D = diag(D);
 
 %% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
 F = u_lambda(1,:); % u(0, lambda_i)
@@ -52,9 +39,9 @@ end
 
 
 %% Mass & Stiffness matrices
-% M & S are symmetric
+% M & S are symmetric w.r.t <-,->_D
 Mass      = -diag(dF_dlambda);
-Stiffness = diag(dF_dlambda);
+Stiffness = (dF_dlambda)*diag(lambda) + dF_dlambda; % lambda dF/dlambda + dF/dlambda
 
 for i = 1:numel(lambda)
     for j = 1:numel(lambda)
@@ -73,13 +60,19 @@ end
 benchmark_Mass = Mass*0;
 benchmark_Stiffness = Stiffness*0;
 
-
 for i = 1:numel(lambda)
     for j = 1:numel(lambda)
         benchmark_Mass(i,j) = u_lambda(:,i)' * D * u_lambda(:,j);
-        benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * A * u_lambda(:,j); % A is SPD
+        benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * A * u_lambda(:,j); 
     end
 end
+
+n=10;
+b = rand(n,1); % vector of length n = 10
+[Q,alpha,beta] = Lanczos(A,b,n);
+%full(Q' * B * Q) % Verify T = Q' A Q
+% Also check Q^T Q = Identity
+%full(Q' * Q)
 
 %% Lanczos algorithm
 function [Q, alpha, beta] = Lanczos(A,b,iter)
@@ -110,19 +103,4 @@ function [Q, alpha, beta] = Lanczos(A,b,iter)
         end
     end
 end
-
-%% SPD generation code found on Math.SE
-function A = generateSPDmatrix(n)
-% Generate a dense n x n symmetric, positive definite matrix
-
-A = rand(n,n); % generate a random n x n matrix
-
-% construct a symmetric matrix using either
-A = 0.5*(A+A'); 
-%A = A*A';
-% The first is significantly faster: O(n^2) compared to O(n^3)
-
-% since A(i,j) < 1 by construction and a symmetric diagonally dominant matrix
-%   is symmetric positive definite, which can be ensured by adding nI
-A = A + n*eye(n);
-end
+toc
