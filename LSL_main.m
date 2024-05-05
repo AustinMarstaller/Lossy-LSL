@@ -18,6 +18,11 @@ L = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + L_diag;
 L(1,2) = -2/h^2;
 L(M+1,M) = -2/h^2;
 
+L_ref_diag = 2/h^2 * eye(M+1,M+1) + diag(p_reference);
+L_ref = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + L_diag;
+L_ref(1,2) = -2/h^2;
+L_ref(M+1,M) = -2/h^2;
+
 %% Store solution vectors per lambda in a matrix
 u_lambda           = zeros(M+1,numel(lambda)); % [u(x; lambda_1) | ... | u(x; lambda_2024)]
 u_lambda_reference = zeros(M+1,numel(lambda)); 
@@ -38,9 +43,12 @@ F = u_lambda(1,:); % u(0, lambda_i)
 F_reference = u_lambda_reference(1,:);
 
 dF_dlambda = zeros(1,numel(lambda));
+dF_dlambda_reference = zeros(1,numel(lambda));
+
 for i = 1:numel(lambda)
     % dF/dlambda = -u^T D u
     dF_dlambda(i) = -u_lambda(:,i)' * D * u_lambda(:,i);
+    dF_dlambda_reference(i) = -u_lambda_reference(:,i)' * D * u_lambda_reference(:,i);
 end
 
 %% Mass & Stiffness matrices
@@ -50,19 +58,31 @@ end
 Mass      = -diag(dF_dlambda); 
 Stiffness = diag((dF_dlambda)*diag(lambda) + F); % lambda dF/dlambda + F
 
+Mass_reference =  -diag(dF_dlambda_reference);
+Stiffness_reference = diag((dF_dlambda_reference)*diag(lambda) + F_reference);
+
 % Mass(i,j) ?= u_i^T D u_j =: benchmark_Mass,
 % Stiffness(i,j) ?= u_i^T D A u_j =: benchmark_Stiffness
 benchmark_Mass = Mass*0;
 benchmark_Stiffness = Stiffness*0;
+
+benchmark_Mass_reference = Mass_reference*0;
+benchmark_Stiffness_reference = Stiffness_reference*0;
 
 for i = 1:numel(lambda)
     for j = 1:numel(lambda)
         if j ~= i
             Mass(i,j) = (F(i) - F(j))/(lambda(j) - lambda(i));
             Stiffness(i,j) = (F(j)*lambda(j) - F(i)*lambda(i))/(lambda(j) - lambda(i));
+
+            Mass_reference(i,j) = (F_reference(i) - F_reference(j))/(lambda(j) - lambda(i));
+            Stiffness_reference(i,j) = (F_reference(j)*lambda(j) - F_reference(i)*lambda(i))/(lambda(j) - lambda(i));
         end
             benchmark_Mass(i,j) = u_lambda(:,i)' * D * u_lambda(:,j);
             benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * L * u_lambda(:,j); 
+
+            benchmark_Mass_reference(i,j) = u_lambda_reference(:,i)' * D * u_lambda_reference(:,j);
+            benchmark_Stiffness_reference(i,j) = u_lambda_reference(:,i)' * D * L_ref * u_lambda_reference(:,j); 
     end
 end
 
