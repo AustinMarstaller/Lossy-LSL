@@ -98,9 +98,12 @@ function [u] = LSL_FD(M,L,h,lambda)
     u = A\f;
 end
 
-n=10;
-b = rand(n,1); % vector of length n = 10
-%[Q,alpha,beta] = Lanczos(A,b,n); % Perform Lanczos for change of basis: QV
+n=7;
+M_inverse = inv(Mass);
+A = M_inverse*Stiffness;
+b = u_lambda(1,:)';
+b = M_inverse*b;
+[Q,alpha,beta] = Lanczos(A,b,n); % Perform Lanczos for change of basis: QV
 
 %% Lanczos algorithm
 function [Q, alpha, beta] = Lanczos(A,b,iter)
