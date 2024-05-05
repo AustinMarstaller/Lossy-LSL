@@ -12,14 +12,20 @@ p = exp(-(x-mu).^2 / sigma^2); % p = 0 for reference problem
 p_reference = zeros(M+1,1);
 lambda = [2,4,6,8,16,32,48];
 
+% Operator L = -Del + p
+L_diag = 2/h^2 * eye(M+1,M+1) + diag(p);
+L = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + L_diag;
+L(1,2) = -2/h^2;
+L(M+1,M) = -2/h^2;
+
 %% Store solution vectors per lambda in a matrix
 u_lambda           = zeros(M+1,numel(lambda)); % [u(x; lambda_1) | ... | u(x; lambda_2024)]
 u_lambda_reference = zeros(M+1,numel(lambda)); 
 
 for j = 1:numel(lambda)
     % Each column is a solution for a particular value of lambda
-    [u_lambda(:,j),A] = LSL_FD(M,p,h,lambda(j)); % (u_j(0), u_j(1), ..., u_j(M))^T
-    [u_lambda_reference(:,j),C] = LSL_FD(M,p_reference,h,lambda(j));
+    [u_lambda(:,j)] = LSL_FD(M,L,h,lambda(j)); % (u_j(0), u_j(1), ..., u_j(M))^T
+    [u_lambda_reference(:,j)] = LSL_FD(M,L,h,lambda(j));
 end
 
 D = ones(1,M+1)*h;
@@ -56,19 +62,14 @@ for i = 1:numel(lambda)
             Stiffness(i,j) = (F(j)*lambda(j) - F(i)*lambda(i))/(lambda(j) - lambda(i));
         end
             benchmark_Mass(i,j) = u_lambda(:,i)' * D * u_lambda(:,j);
-            benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * A * u_lambda(:,j); 
+            benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * L * u_lambda(:,j); 
     end
 end
 
-
 %% Finite difference scheme to solve the BVP: -u'' + (p(x) + lambda)u = g(x), u'(0)=-1, u'(1)=0
-
-function [u, A] = LSL_FD(M,p,h,lambda)
+function [u] = LSL_FD(M,L,h,lambda)
     % Coefficient matrix A is M+1 x M+1
-    A_diag = 2/h^2 * eye(M+1,M+1) + diag(p) + lambda * eye(M+1,M+1); 
-    A = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + A_diag;
-    A(1,2) = -2/h^2;
-    A(M+1,M) = -2/h^2;
+    A = L + lambda * eye(M+1,M+1);
     % Construct right-hand-side Mx1 vector f =(2/h, 0, ..., 0)^T 
     f = zeros(M+1,1);
     f(1)=2/h;
@@ -77,10 +78,9 @@ function [u, A] = LSL_FD(M,p,h,lambda)
     u = A\f;
 end
 
-
 n=10;
 b = rand(n,1); % vector of length n = 10
-[Q,alpha,beta] = Lanczos(A,b,n); % Perform Lanczos for change of basis: QV
+%[Q,alpha,beta] = Lanczos(A,b,n); % Perform Lanczos for change of basis: QV
 
 %% Lanczos algorithm
 function [Q, alpha, beta] = Lanczos(A,b,iter)
