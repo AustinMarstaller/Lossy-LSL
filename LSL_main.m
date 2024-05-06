@@ -98,13 +98,35 @@ function [u] = LSL_FD(M,L,h,lambda)
     u = A\f;
 end
 
+
+%% Lanczos algorithm
 m=numel(lambda);
+V = u_lambda;
+threshold = 4*10^(-3);
+[X,D] = eig(Mass);
+
+% Enforce increasing order of eigenvalues & eigenvectors
+if ~issorted(diag(D))
+    [X,D] = eig(A);
+    [D,I] = sort(diag(D));
+    X = X(:, I);
+end
+
+% Grab the dominant eigenvectors 
+for i = 1:length(diag(D))
+    if D(i,i) > threshold
+        Z = X(:,i:end);
+    end
+end
+
+V_tilde = V * Z;
+M_tilde = V_tilde' * V_tilde;
+S_tilde = V_tilde' * L * V; 
+
 M_inverse = inv(Mass);
 A = M_inverse*Stiffness;
 b = M_inverse * u_lambda(1,:)'; % <u_i, delta(x)>_M = M_inverse*u_i(0). 
 [Q,alpha,beta] = Lanczos(A,Mass,M_inverse,b,m); % Perform Lanczos for change of basis: QV
-
-%% Lanczos algorithm
 function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
     %% Some initialization
     [row, col] = size(b);
@@ -123,6 +145,8 @@ function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
         if i > 1
             v = v - beta(i-1)*Q(:,i-1); % q_i = (A q_i - beta_(i-1) q_(i-1) - alpha_i q_i)
         end
+
+        % Enforce orthoganalization to overcome loss of orthognalization
         for k = 1:3
             for j = i:-1:1
                 cf = Q(:,j)'*Mass*v;
