@@ -7,11 +7,11 @@ h=1/M; % Grid point spacing.
 x=(0:h:1)'; % Lattice in column vector
 
 mu = 0.3;
-sigma = 0.25;
+sigma = 0.125;
 p = exp(-(x-mu).^2 / sigma^2); % p = 0 for reference problem
 p_reference = zeros(M+1,1);
-lambda = [2,4,6,8,16,32,48];
-
+%lambda = [2,4,6,8,16,32,48];
+lambda = [2,6,16,48];
 % Operator L = -Del + p
 L_diag = 2/h^2 * eye(M+1,M+1) + diag(p);
 L = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + L_diag;
@@ -98,17 +98,17 @@ function [u] = LSL_FD(M,L,h,lambda)
     u = A\f;
 end
 
-n=7;
+m=numel(lambda);
 M_inverse = inv(Mass);
 A = M_inverse*Stiffness;
-b = u_lambda(1,:)'; % <u_i, delta(x)> = u_i(0). 
-[Q,alpha,beta] = Lanczos(A,Mass,M_inverse,b,n); % Perform Lanczos for change of basis: QV
+b = M_inverse * u_lambda(1,:)'; % <u_i, delta(x)>_M = M_inverse*u_i(0). 
+[Q,alpha,beta] = Lanczos(A,Mass,M_inverse,b,m); % Perform Lanczos for change of basis: QV
 
 %% Lanczos algorithm
 function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
     %% Some initialization
     [row, col] = size(b);
-    Q          = zeros(row, iter); % Q = [q_1 | q_2 | ... | q_n]
+    Q          = zeros(row, iter); % Q = [q_1 | q_2 | ... | q_m]
     Q(:,1)     = (M_inverse*b)/sqrt(b'*M_inverse*b);  % q_1 = M^-1 b /sqrt(b^T inv(M) b)
     alpha = zeros(iter,1);   % Main diagonal
     beta  = zeros(iter-1,1); % beta = (beta_1,..., beta_n). 
@@ -123,12 +123,18 @@ function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
         if i > 1
             v = v - beta(i-1)*Q(:,i-1); % q_i = (A q_i - beta_(i-1) q_(i-1) - alpha_i q_i)
         end
+        for k = 1:3
+            for j = i:-1:1
+                cf = Q(:,j)'*Mass*v;
+                v = v - cf*Q(:,j);
+            end
+        end
         
         beta(i)  = sqrt(v' * Mass* v); % norm corresponding to M inner product
         v = v/beta(i); % Normalize w.r.t M inner-product
         
         if i < iter
-            % i = iter => Q is n x n+1
+            % i = iter => Q is m x m+1
             Q(:,i+1) = v;
         end
     end
