@@ -2,12 +2,12 @@ clear all
 close all
 tic
 %% Synthetic data construction
-M=9; % M+1 total grid points
+M=256; % M+1 total grid points
 h=1/M; % Grid point spacing. 
 x=(0:h:1)'; % Lattice in column vector
 
-mu = 0.35;
-sigma = 0.27;
+mu = 0.3;
+sigma = 0.25;
 p = exp(-(x-mu).^2 / sigma^2); % p = 0 for reference problem
 p_reference = zeros(M+1,1);
 lambda = [2,4,6,8,16,32,48];
@@ -101,16 +101,15 @@ end
 n=7;
 M_inverse = inv(Mass);
 A = M_inverse*Stiffness;
-b = u_lambda(1,:)';
-b = M_inverse*b;
-[Q,alpha,beta] = Lanczos(A,b,n); % Perform Lanczos for change of basis: QV
+b = u_lambda(1,:)'; % <u_i, delta(x)> = u_i(0). 
+[Q,alpha,beta] = Lanczos(A,Mass,M_inverse,b,n); % Perform Lanczos for change of basis: QV
 
 %% Lanczos algorithm
-function [Q, alpha, beta] = Lanczos(A,b,iter)
+function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
     %% Some initialization
     [row, col] = size(b);
     Q          = zeros(row, iter); % Q = [q_1 | q_2 | ... | q_n]
-    Q(:,1)     = b/norm(b);  % q_1 = b/||b||
+    Q(:,1)     = (M_inverse*b)/sqrt(b'*M_inverse*b);  % q_1 = M^-1 b /sqrt(b^T inv(M) b)
     alpha = zeros(iter,1);   % Main diagonal
     beta  = zeros(iter-1,1); % beta = (beta_1,..., beta_n). 
     
@@ -118,15 +117,15 @@ function [Q, alpha, beta] = Lanczos(A,b,iter)
     for i = 1:iter
         %% Construct column vector q_(i+1) as Q = [... | q_(i+1) | ...]
         v        = A*Q(:,i);      % A * q_i 
-        alpha(i) = (Q(:,i))' * v; % q_i^T M * A * q_i
+        alpha(i) = Q(:,i)' *Mass* v; % M inner product: q_i^T M * A * q_i
     
         v = v - alpha(i)*Q(:,i);  
         if i > 1
             v = v - beta(i-1)*Q(:,i-1); % q_i = (A q_i - beta_(i-1) q_(i-1) - alpha_i q_i)
         end
         
-        beta(i)  = norm(v); 
-        v = v/beta(i); % Normalize 
+        beta(i)  = sqrt(v' * Mass* v); % norm corresponding to M inner product
+        v = v/beta(i); % Normalize w.r.t M inner-product
         
         if i < iter
             % i = iter => Q is n x n+1
