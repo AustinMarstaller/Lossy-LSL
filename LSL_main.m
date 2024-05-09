@@ -31,7 +31,7 @@ u_lambda_reference = zeros(M+1,numel(lambda));
 for j = 1:numel(lambda)
     % Each column is a solution for a particular value of lambda
     [u_lambda(:,j)]           = LSL_FD(M,L,h,lambda(j)); % (u_j(0), u_j(1), ..., u_j(M))^T
-    [u_lambda_reference(:,j)] = LSL_FD(M,L,h,lambda(j));
+    [u_lambda_reference(:,j)] = LSL_FD(M,L_ref,h,lambda(j));
 end
 
 D      = ones(1,M+1)*h;
@@ -105,7 +105,7 @@ end
 
 %% Lanczos algorithm & truncated ROM
 V           = u_lambda;
-V_ref = u_lambda_reference;
+V_ref       = u_lambda_reference;
 
 threshold = 10^(-12);
 
@@ -156,25 +156,21 @@ S_tilde_ref = V_tilde_ref' * L_ref * V_tilde_ref;
 M_inverse = inv(M_tilde);
 A = M_inverse*S_tilde;
 b = Z'*u_lambda(1,:)';  
-%b = u_lambda(1,:)';  
 [row col] = size(M_tilde);
 m = col;
 
 M_inverse_ref = inv(M_tilde_ref);
 A_ref = M_inverse_ref*S_tilde_ref;
 b_ref = Z_ref'*u_lambda_reference(1,:)';  
-%b = u_lambda(1,:)';  
 [row_ref col_ref] = size(M_tilde_ref);
-m = col_ref;
+m_ref = col_ref;
 
-[Q_ref,alpha_ref,beta_ref] = Lanczos(A_ref,M_tilde_ref,M_inverse_ref,b_ref,m); % Perform Lanczos for change of basis: QV
+[Q_ref,alpha_ref,beta_ref] = Lanczos(A_ref,M_tilde_ref,M_inverse_ref,b_ref,m_ref); % Perform Lanczos for change of basis: QV
 
 [Q,alpha,beta] = Lanczos(A,M_tilde,M_inverse,b,m); % Perform Lanczos for change of basis: QV
 
 function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
     %% Some initialization
-
-
     [row, col] = size(b);
 
     Q          = zeros(row, iter); % Q = [q_1 | q_2 | ... | q_m]
