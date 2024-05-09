@@ -104,9 +104,13 @@ end
 
 
 %% Lanczos algorithm & truncated ROM
-V = u_lambda;
-threshold = 10^(-4);
-[X,D] = eig(Mass);
+V           = u_lambda;
+V_ref = u_lambda_reference;
+
+threshold = 10^(-12);
+
+[X,D]          = eig(Mass);
+[X_ref, D_ref] = eig(Mass_reference);
 
 % Enforce increasing order of eigenvalues & eigenvectors
 if ~issorted(diag(D))
@@ -114,19 +118,38 @@ if ~issorted(diag(D))
     X = X(:, I);
 end
 
+if ~issorted(diag(D_ref))
+    [D_ref,I_ref] = sort(diag(D_ref));
+    X_ref = X_ref(:, I_ref);
+end
+
 % Grab the dominant eigenvectors 
 index_threshold = 0;
 for i = 1:length(diag(D))
-    if D(i,i) > threshold
+    if D(i,i) > D(end)*threshold
         index_threshold=i;
         break;
     end
 end
 Z = X(:,index_threshold:end);
 
+index_threshold = 0;
+for i = 1:length(diag(D_ref))
+    if D_ref(i,i) > D_ref(end)*threshold
+        index_threshold=i;
+        break;
+    end
+end
+Z_ref = X_ref(:,index_threshold:end);
+
 V_tilde = V * Z;
 M_tilde = V_tilde' * V_tilde;
 S_tilde = V_tilde' * L * V_tilde; 
+
+V_tilde_ref = V_ref * Z_ref;
+M_tilde_ref = V_tilde_ref' * V_tilde_ref;
+S_tilde_ref = V_tilde_ref' * L_ref * V_tilde_ref; 
+
 
 %M_inverse = inv(Mass);
 %A = M_inverse*Stiffness;
@@ -134,7 +157,18 @@ M_inverse = inv(M_tilde);
 A = M_inverse*S_tilde;
 b = Z'*u_lambda(1,:)';  
 %b = u_lambda(1,:)';  
-m=3;
+[row col] = size(M_tilde);
+m = col;
+
+M_inverse_ref = inv(M_tilde_ref);
+A_ref = M_inverse_ref*S_tilde_ref;
+b_ref = Z_ref'*u_lambda_reference(1,:)';  
+%b = u_lambda(1,:)';  
+[row_ref col_ref] = size(M_tilde_ref);
+m = col_ref;
+
+[Q_ref,alpha_ref,beta_ref] = Lanczos(A_ref,M_tilde_ref,M_inverse_ref,b_ref,m); % Perform Lanczos for change of basis: QV
+
 [Q,alpha,beta] = Lanczos(A,M_tilde,M_inverse,b,m); % Perform Lanczos for change of basis: QV
 
 function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
