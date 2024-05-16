@@ -183,6 +183,7 @@ end
 
 % Compare the exact sol. with u_approx
 figure
+subplot(2,1,1)
 hold on;
 plot(x,u_lambda(:,1), 'LineWidth',2.5);
 plot(x,u_approx(:,1), 'LineWidth',2.5);
@@ -191,6 +192,19 @@ xlabel("Grid");
 ylabel("Data"), 
 
 title('$u(\lambda_1)$ and $\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
+hold off;
+subplot(2,1,2)
+plot(x,V_tilde * Q(:,1:3))
+hold on
+plot(x,V_tilde_ref * Q_ref(:,1:3), '--')
+legend('$\widetilde{V}Q(:,1)$','$\widetilde{V}Q(:,2)$','$\widetilde{V}Q(:,3)$','$\widetilde{V}_0Q_0(:,1)$', ...
+    '$\widetilde{V}_0Q_0(:,2)$', ...
+    '$\widetilde{V}_0Q_0(:,3)$', ...
+    'Interpreter','latex','FontSize',16)
+xlabel("Grid");
+ylabel("Basis vectors"), 
+
+title('First three columns: $\widetilde{V}Q$ and $\widetilde{V}_0 Q_0$','Interpreter','latex','FontSize',16)
 hold off;
 function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
     %% Some initialization
