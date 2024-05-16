@@ -154,21 +154,44 @@ S_tilde_ref = V_tilde_ref' * L_ref * V_tilde_ref;
 %M_inverse = inv(Mass);
 %A = M_inverse*Stiffness;
 M_inverse = inv(M_tilde);
-A = M_inverse*S_tilde;
-b = Z'*u_lambda(1,:)';  
+A         = M_inverse*S_tilde;
+b         = Z'*u_lambda(1,:)';  
 [row col] = size(M_tilde);
-m = col;
+m         = col;
 
-M_inverse_ref = inv(M_tilde_ref);
-A_ref = M_inverse_ref*S_tilde_ref;
-b_ref = Z_ref'*u_lambda_reference(1,:)';  
+M_inverse_ref     = inv(M_tilde_ref);
+A_ref             = M_inverse_ref*S_tilde_ref;
+b_ref             = Z_ref'*u_lambda_reference(1,:)';  
 [row_ref col_ref] = size(M_tilde_ref);
-m_ref = col_ref;
+m_ref             = col_ref;
 
 [Q_ref,alpha_ref,beta_ref] = Lanczos(A_ref,M_tilde_ref,M_inverse_ref,b_ref,m_ref); % Perform Lanczos for change of basis: QV
 
 [Q,alpha,beta] = Lanczos(A,M_tilde,M_inverse,b,m); % Perform Lanczos for change of basis: QV
 
+%% Lippman-Schwinger
+
+% Eq (3.8): u ~= sqrt(b^T inv(M) b) V_0 Q_0 (T+ lambda * Id)^-1 e_1
+T = diag(beta(1:end-1),-1) + diag(alpha,0) + diag(beta(1:end-1),1);
+%u_approx = sqrt(b' * M_inverse * b) * V_tilde_ref * Q_ref * inv(T + lambda*);
+e1 = ones(length(b),1);
+e1(2:end) = 0;
+u_approx = u_lambda*0;
+for i = 1:numel(lambda)
+    u_approx(:,i) = diag(sqrt(b' * M_inverse * b),M) * V_tilde_ref * Q_ref * inv(T + lambda(i)*eye(size(T))) * e1;
+end
+
+% Compare the exact sol. with u_approx
+figure
+hold on;
+plot(x,u_lambda(:,1), 'LineWidth',2.5);
+plot(x,u_approx(:,1), 'LineWidth',2.5);
+legend('$u(\lambda_1)$','$\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
+xlabel("Grid");
+ylabel("Data"), 
+
+title('$u(\lambda_1)$ and $\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
+hold off;
 function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
     %% Some initialization
     [row, col] = size(b);
