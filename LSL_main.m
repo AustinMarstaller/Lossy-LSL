@@ -34,10 +34,10 @@ for j = 1:numel(lambda)
     [u_lambda_reference(:,j)] = LSL_FD(M,L_ref,h,lambda(j));
 end
 
-D      = ones(1,M+1)*h;
-D(1)   = h/2;
-D(end) = h/2;
-D      = diag(D);
+eig_values      = ones(1,M+1)*h;
+eig_values(1)   = h/2;
+eig_values(end) = h/2;
+eig_values      = diag(eig_values);
 
 %% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
 F           = u_lambda(1,:); % u(0, lambda_i)
@@ -45,14 +45,22 @@ F_reference = u_lambda_reference(1,:);
 
 dF_dlambda           = zeros(1,numel(lambda));
 dF_dlambda_reference = zeros(1,numel(lambda));
+b                    = zeros(numel(lambda),1);
 
 for i = 1:numel(lambda)
     % dF/dlambda = -u^T D u
-    dF_dlambda(i) = -u_lambda(:,i)' * D * u_lambda(:,i);
-    dF_dlambda_reference(i) = -u_lambda_reference(:,i)' * D * u_lambda_reference(:,i);
+    dF_dlambda(i) = -u_lambda(:,i)' * eig_values * u_lambda(:,i);
+    dF_dlambda_reference(i) = -u_lambda_reference(:,i)' * eig_values * u_lambda_reference(:,i);
 end
 
-%% Mass & Stiffness matrices
+dirac_delta = zeros(numel(x),1);
+dirac_delta(1) = 1;
+
+for i = 1:numel(lambda)
+    b(i) = u_lambda(:,i)'*eig_values*dirac_delta;
+end
+
+%% Mass & Stiffness matrices & b column vector
 % M & S are symmetric w.r.t <-,->_D
 % M_ii = -u^T D u
 % S_ii = lambda dF/dlambda + F
@@ -81,14 +89,126 @@ for i = 1:numel(lambda)
             Stiffness_reference(i,j) = (F_reference(j)*lambda(j) - F_reference(i)*lambda(i))/(lambda(j) - lambda(i));
         end
 
-      benchmark_Mass(i,j)      = u_lambda(:,i)' * D * u_lambda(:,j);
-      benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * L * u_lambda(:,j); 
+      benchmark_Mass(i,j)      = u_lambda(:,i)' * eig_values * u_lambda(:,j);
+      benchmark_Stiffness(i,j) = u_lambda(:,i)' * eig_values * L * u_lambda(:,j); 
 
-      benchmark_Mass_reference(i,j)      = u_lambda_reference(:,i)' * D * u_lambda_reference(:,j);
-      benchmark_Stiffness_reference(i,j) = u_lambda_reference(:,i)' * D * L_ref * u_lambda_reference(:,j); 
+      benchmark_Mass_reference(i,j)      = u_lambda_reference(:,i)' * eig_values * u_lambda_reference(:,j);
+      benchmark_Stiffness_reference(i,j) = u_lambda_reference(:,i)' * eig_values * L_ref * u_lambda_reference(:,j); 
 
     end
 end
+
+%% Lanczos algorithm & truncated ROM
+V           = u_lambda;
+V_ref       = u_lambda_reference;
+
+threshold = 10^(-12);
+
+[X,eig_values]          = eig(Mass);
+[X_ref, eig_values_ref] = eig(Mass_reference);
+
+% Enforce increasing order of eigenvalues & eigenvectors
+if ~issorted(diag(eig_values))
+    [eig_values,I] = sort(diag(eig_values));
+    X = X(:, I);
+end
+
+if ~issorted(diag(eig_values_ref))
+    [eig_values_ref,I_ref] = sort(diag(eig_values_ref));
+    X_ref = X_ref(:, I_ref);
+end
+
+% Grab the dominant eigenvectors 
+index_threshold = 0;
+for i = 1:length(diag(eig_values))
+    if eig_values(i,i) > eig_values(end)*threshold
+        index_threshold=i;
+        break;
+    end
+end
+Z = X(:,index_threshold:end);
+
+index_threshold = 0;
+for i = 1:length(diag(eig_values_ref))
+    if eig_values_ref(i,i) > eig_values_ref(end)*threshold
+        index_threshold=i;
+        break;
+    end
+end
+Z_ref = X_ref(:,index_threshold:end);
+
+V_tilde = V * Z;
+M_tilde = Z' * Mass * Z;
+S_tilde = Z' * Stiffness * Z; 
+
+V_tilde_ref = V_ref * Z_ref;
+M_tilde_ref = Z_ref' * Mass_reference * Z_ref;   
+S_tilde_ref = Z_ref' * Stiffness_reference * Z_ref; 
+
+M_inverse = inv(M_tilde);
+A_tilde         = M_inverse*S_tilde;
+b_tilde         = Z'*b;  
+[row col] = size(M_tilde);
+m         = col;
+
+M_inverse_ref           = inv(M_tilde_ref);
+A_tilde_ref             = M_inverse_ref*S_tilde_ref;
+b_tilde_ref             = Z_ref'*b;  
+[row_ref col_ref] = size(M_tilde_ref);
+m_ref             = col_ref;
+
+[Q_tilde_ref,alpha_tilde_ref,beta_tilde_ref] = Lanczos(A_tilde_ref,M_tilde_ref,M_inverse_ref,b_tilde_ref,m_ref); % Perform Lanczos for change of basis: QV
+
+[Q_tilde,alpha_tilde,beta_tilde] = Lanczos(A_tilde,M_tilde,M_inverse,b_tilde,m); % Perform Lanczos for change of basis: QV
+
+%% Lippman-Schwinger
+
+% Eq (3.8): u ~= sqrt(b^T inv(M) b) V_0 Q_0 (T+ lambda * Id)^-1 e_1
+T_tilde = diag(beta_tilde(1:end-1),-1) + diag(alpha_tilde,0) + diag(beta_tilde(1:end-1),1);
+e1 = ones(length(b_tilde),1);
+e1(2:end) = 0;
+u_approx = u_lambda*0;
+for i = 1:numel(lambda)
+    u_approx(:,i) = sqrt(b_tilde' * M_inverse * b_tilde) * V_tilde_ref * Q_tilde_ref * inv(T_tilde + lambda(i)*eye(size(T_tilde))) * e1;
+    u_approx_test(:,i) = sqrt(b_tilde' * M_inverse * b_tilde) * V_tilde * Q_tilde * inv(T_tilde + lambda(i)*eye(size(T_tilde))) * e1;
+end
+
+% Compare the exact sol. with u_approx and basis functions
+figure
+subplot(3,1,1)
+hold on;
+plot(x,u_lambda(:,1), 'LineWidth',2.5);
+plot(x,u_approx(:,1), 'LineWidth',2.5);
+legend('$u(\lambda_1)$','$\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
+xlabel("Grid");
+ylabel("Data"), 
+
+title('$u(\lambda_1)$ and $\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
+hold off;
+subplot(3,1,2)
+hold on;
+plot(x,u_lambda(:,1), 'LineWidth',2.5);
+plot(x,u_approx_test(:,1), 'LineWidth',2.5);
+legend('$u(\lambda_1)$','$\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
+xlabel("Grid");
+ylabel("Data"), 
+
+title('$u(\lambda_1)$ and $\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
+hold off;
+subplot(3,1,3)
+plot(x,V_tilde * Q_tilde(:,1:3))
+hold on
+plot(x,V_tilde_ref * Q_tilde_ref(:,1:3), '--')
+legend('$\widetilde{V}\widetilde{Q}(:,1)$','$\widetilde{V}\widetilde{Q}(:,2)$','$\widetilde{V}\widetilde{Q}(:,3)$','$\widetilde{V}_0\widetilde{Q}_0(:,1)$', ...
+    '$\widetilde{V}_0\widetilde{Q}_0(:,2)$', ...
+    '$\widetilde{V}_0\widetilde{Q}_0(:,3)$', ...
+    'Interpreter','latex','FontSize',16)
+xlabel("Grid");
+ylabel("Basis vectors"), 
+
+title('First three columns: $\widetilde{V}\widetilde{Q}$ and $\widetilde{V}_0 \widetilde{Q}_0$','Interpreter','latex','FontSize',16)
+hold off;
+
 
 %% Finite difference scheme to solve the BVP: -u'' + (p(x) + lambda)u = g(x), u'(0)=-1, u'(1)=0
 function [u] = LSL_FD(M,L,h,lambda)
@@ -103,109 +223,7 @@ function [u] = LSL_FD(M,L,h,lambda)
 end
 
 
-%% Lanczos algorithm & truncated ROM
-V           = u_lambda;
-V_ref       = u_lambda_reference;
 
-threshold = 10^(-12);
-
-[X,D]          = eig(Mass);
-[X_ref, D_ref] = eig(Mass_reference);
-
-% Enforce increasing order of eigenvalues & eigenvectors
-if ~issorted(diag(D))
-    [D,I] = sort(diag(D));
-    X = X(:, I);
-end
-
-if ~issorted(diag(D_ref))
-    [D_ref,I_ref] = sort(diag(D_ref));
-    X_ref = X_ref(:, I_ref);
-end
-
-% Grab the dominant eigenvectors 
-index_threshold = 0;
-for i = 1:length(diag(D))
-    if D(i,i) > D(end)*threshold
-        index_threshold=i;
-        break;
-    end
-end
-Z = X(:,index_threshold:end);
-
-index_threshold = 0;
-for i = 1:length(diag(D_ref))
-    if D_ref(i,i) > D_ref(end)*threshold
-        index_threshold=i;
-        break;
-    end
-end
-Z_ref = X_ref(:,index_threshold:end);
-
-V_tilde = V * Z;
-M_tilde = V_tilde' * V_tilde;
-S_tilde = V_tilde' * L * V_tilde; 
-
-V_tilde_ref = V_ref * Z_ref;
-M_tilde_ref = V_tilde_ref' * V_tilde_ref;
-S_tilde_ref = V_tilde_ref' * L_ref * V_tilde_ref; 
-
-
-%M_inverse = inv(Mass);
-%A = M_inverse*Stiffness;
-M_inverse = inv(M_tilde);
-A         = M_inverse*S_tilde;
-b         = Z'*u_lambda(1,:)';  
-[row col] = size(M_tilde);
-m         = col;
-
-M_inverse_ref     = inv(M_tilde_ref);
-A_ref             = M_inverse_ref*S_tilde_ref;
-b_ref             = Z_ref'*u_lambda_reference(1,:)';  
-[row_ref col_ref] = size(M_tilde_ref);
-m_ref             = col_ref;
-
-[Q_ref,alpha_ref,beta_ref] = Lanczos(A_ref,M_tilde_ref,M_inverse_ref,b_ref,m_ref); % Perform Lanczos for change of basis: QV
-
-[Q,alpha,beta] = Lanczos(A,M_tilde,M_inverse,b,m); % Perform Lanczos for change of basis: QV
-
-%% Lippman-Schwinger
-
-% Eq (3.8): u ~= sqrt(b^T inv(M) b) V_0 Q_0 (T+ lambda * Id)^-1 e_1
-T = diag(beta(1:end-1),-1) + diag(alpha,0) + diag(beta(1:end-1),1);
-%u_approx = sqrt(b' * M_inverse * b) * V_tilde_ref * Q_ref * inv(T + lambda*);
-e1 = ones(length(b),1);
-e1(2:end) = 0;
-u_approx = u_lambda*0;
-for i = 1:numel(lambda)
-    u_approx(:,i) = diag(sqrt(b' * M_inverse * b),M) * V_tilde_ref * Q_ref * inv(T + lambda(i)*eye(size(T))) * e1;
-end
-
-% Compare the exact sol. with u_approx
-figure
-subplot(2,1,1)
-hold on;
-plot(x,u_lambda(:,1), 'LineWidth',2.5);
-plot(x,u_approx(:,1), 'LineWidth',2.5);
-legend('$u(\lambda_1)$','$\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
-xlabel("Grid");
-ylabel("Data"), 
-
-title('$u(\lambda_1)$ and $\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
-hold off;
-subplot(2,1,2)
-plot(x,V_tilde * Q(:,1:3))
-hold on
-plot(x,V_tilde_ref * Q_ref(:,1:3), '--')
-legend('$\widetilde{V}Q(:,1)$','$\widetilde{V}Q(:,2)$','$\widetilde{V}Q(:,3)$','$\widetilde{V}_0Q_0(:,1)$', ...
-    '$\widetilde{V}_0Q_0(:,2)$', ...
-    '$\widetilde{V}_0Q_0(:,3)$', ...
-    'Interpreter','latex','FontSize',16)
-xlabel("Grid");
-ylabel("Basis vectors"), 
-
-title('First three columns: $\widetilde{V}Q$ and $\widetilde{V}_0 Q_0$','Interpreter','latex','FontSize',16)
-hold off;
 function [Q, alpha, beta] = Lanczos(A,Mass,M_inverse,b,iter)
     %% Some initialization
     [row, col] = size(b);
