@@ -20,7 +20,7 @@ L(1,2)   = -2/h^2;
 L(M+1,M) = -2/h^2;
 
 L_ref_diag   = 2/h^2 * eye(M+1,M+1) + diag(p_reference);
-L_ref        = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + L_diag;
+L_ref        = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + L_ref_diag;
 L_ref(1,2)   = -2/h^2;
 L_ref(M+1,M) = -2/h^2;
 
@@ -34,30 +34,24 @@ for j = 1:numel(lambda)
     [u_lambda_reference(:,j)] = LSL_FD(M,L_ref,h,lambda(j));
 end
 
-eig_values      = ones(1,M+1)*h;
-eig_values(1)   = h/2;
-eig_values(end) = h/2;
-eig_values      = diag(eig_values);
+D      = ones(1,M+1)*h;
+D(1)   = h/2;
+D(end) = h/2;
+D      = diag(D);
 
 %% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
-F           = u_lambda(1,:); % u(0, lambda_i)
-F_reference = u_lambda_reference(1,:);
+F           = u_lambda(1,:)'; % u(0, lambda_i)
+F_reference = u_lambda_reference(1,:)';
 
-dF_dlambda           = zeros(1,numel(lambda));
-dF_dlambda_reference = zeros(1,numel(lambda));
-b                    = zeros(numel(lambda),1);
+dF_dlambda           = zeros(numel(lambda),1);
+dF_dlambda_reference = zeros(numel(lambda),1);
+b                    = F;
+b_ref                = F_reference;
 
 for i = 1:numel(lambda)
     % dF/dlambda = -u^T D u
-    dF_dlambda(i) = -u_lambda(:,i)' * eig_values * u_lambda(:,i);
-    dF_dlambda_reference(i) = -u_lambda_reference(:,i)' * eig_values * u_lambda_reference(:,i);
-end
-
-dirac_delta = zeros(numel(x),1);
-dirac_delta(1) = 1;
-
-for i = 1:numel(lambda)
-    b(i) = u_lambda(:,i)'*eig_values*dirac_delta;
+    dF_dlambda(i) = -u_lambda(:,i)' * D * u_lambda(:,i);
+    dF_dlambda_reference(i) = -u_lambda_reference(:,i)' * D * u_lambda_reference(:,i);
 end
 
 %% Mass & Stiffness matrices & b column vector
@@ -65,10 +59,10 @@ end
 % M_ii = -u^T D u
 % S_ii = lambda dF/dlambda + F
 Mass      = -diag(dF_dlambda); 
-Stiffness = diag((dF_dlambda)*diag(lambda) + F); % lambda dF/dlambda + F
+Stiffness = diag(diag(lambda)*(dF_dlambda) + F); % lambda dF/dlambda + F
 
 Mass_reference      =  -diag(dF_dlambda_reference);
-Stiffness_reference = diag((dF_dlambda_reference)*diag(lambda) + F_reference);
+Stiffness_reference = diag(diag(lambda) * (dF_dlambda_reference) + F_reference);
 
 % Mass(i,j) ?= u_i^T D u_j =: benchmark_Mass,
 % Stiffness(i,j) ?= u_i^T D A u_j =: benchmark_Stiffness
@@ -89,11 +83,11 @@ for i = 1:numel(lambda)
             Stiffness_reference(i,j) = (F_reference(j)*lambda(j) - F_reference(i)*lambda(i))/(lambda(j) - lambda(i));
         end
 
-      benchmark_Mass(i,j)      = u_lambda(:,i)' * eig_values * u_lambda(:,j);
-      benchmark_Stiffness(i,j) = u_lambda(:,i)' * eig_values * L * u_lambda(:,j); 
+      benchmark_Mass(i,j)      = u_lambda(:,i)' * D * u_lambda(:,j);
+      benchmark_Stiffness(i,j) = u_lambda(:,i)' * D * L * u_lambda(:,j); 
 
-      benchmark_Mass_reference(i,j)      = u_lambda_reference(:,i)' * eig_values * u_lambda_reference(:,j);
-      benchmark_Stiffness_reference(i,j) = u_lambda_reference(:,i)' * eig_values * L_ref * u_lambda_reference(:,j); 
+      benchmark_Mass_reference(i,j)      = u_lambda_reference(:,i)' * D * u_lambda_reference(:,j);
+      benchmark_Stiffness_reference(i,j) = u_lambda_reference(:,i)' * D * L_ref * u_lambda_reference(:,j); 
 
     end
 end
@@ -127,7 +121,7 @@ for i = 1:length(diag(eig_values))
     end
 end
 Z = X(:,index_threshold:end);
-
+[row_Z, l] = size(Z); % Eq. (5.8) Z in R^mxl
 index_threshold = 0;
 for i = 1:length(diag(eig_values_ref))
     if eig_values_ref(i,i) > eig_values_ref(end)*threshold
@@ -153,7 +147,7 @@ m         = col;
 
 M_inverse_ref           = inv(M_tilde_ref);
 A_tilde_ref             = M_inverse_ref*S_tilde_ref;
-b_tilde_ref             = Z_ref'*b;  
+b_tilde_ref             = Z_ref'*b_ref;  
 [row_ref col_ref] = size(M_tilde_ref);
 m_ref             = col_ref;
 
@@ -161,55 +155,50 @@ m_ref             = col_ref;
 
 [Q_tilde,alpha_tilde,beta_tilde] = Lanczos(A_tilde,M_tilde,M_inverse,b_tilde,m); % Perform Lanczos for change of basis: QV
 
-%% Lippman-Schwinger
+%% Lippman-Schwinger formulation 
 
 % Eq (3.8): u ~= sqrt(b^T inv(M) b) V_0 Q_0 (T+ lambda * Id)^-1 e_1
 T_tilde = diag(beta_tilde(1:end-1),-1) + diag(alpha_tilde,0) + diag(beta_tilde(1:end-1),1);
+T_tilde_ref = diag(beta_tilde_ref(1:end-1),-1) + diag(alpha_tilde_ref,0) + diag(beta_tilde_ref(1:end-1),1);
+
 e1 = ones(length(b_tilde),1);
 e1(2:end) = 0;
-u_approx = u_lambda*0;
-for i = 1:numel(lambda)
+u_approx = zeros(length(x), l);
+
+for i = 1:l
     u_approx(:,i) = sqrt(b_tilde' * M_inverse * b_tilde) * V_tilde_ref * Q_tilde_ref * inv(T_tilde + lambda(i)*eye(size(T_tilde))) * e1;
-    u_approx_test(:,i) = sqrt(b_tilde' * M_inverse * b_tilde) * V_tilde * Q_tilde * inv(T_tilde + lambda(i)*eye(size(T_tilde))) * e1;
 end
 
-% Compare the exact sol. with u_approx and basis functions
+% Solve inverse problem F_0 - F_p = <u_approx, p u_ref>
+
+W       = zeros(l,length(x));
+deltaF  = zeros(l,1);
+
+for j = 1:l
+    W(j,:)    = (   u_approx(:,j)  .*  u_lambda(:,j)   )'; % Each row corresponds to lambda = lambda_j
+    deltaF(j) = (   F_reference(j) -            F(j)   );  % Real column vector with l components
+end
+
+p_reconstructed = W\deltaF;
+interpolant_points = find(p_reconstructed); % indices of nonzero values of reconstructed potential
+interpolant_values = p_reconstructed(interpolant_points); 
+
+p_spline = spline(x(interpolant_points), interpolant_values, x);
+
 figure
+
 subplot(3,1,1)
-hold on;
-plot(x,u_lambda(:,1), 'LineWidth',2.5);
-plot(x,u_approx(:,1), 'LineWidth',2.5);
-legend('$u(\lambda_1)$','$\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
-xlabel("Grid");
-ylabel("Data"), 
-
-title('$u(\lambda_1)$ and $\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
-hold off;
-subplot(3,1,2)
-hold on;
-plot(x,u_lambda(:,1), 'LineWidth',2.5);
-plot(x,u_approx_test(:,1), 'LineWidth',2.5);
-legend('$u(\lambda_1)$','$\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
-xlabel("Grid");
-ylabel("Data"), 
-
-title('$u(\lambda_1)$ and $\mathbf{u}(\lambda_1)$','Interpreter','latex','FontSize',16)
-hold off;
-subplot(3,1,3)
-plot(x,V_tilde * Q_tilde(:,1:3))
+plot(x,p,x(interpolant_points),interpolant_values,'o');
+subplot(2,1,2)
 hold on
-plot(x,V_tilde_ref * Q_tilde_ref(:,1:3), '--')
-legend('$\widetilde{V}\widetilde{Q}(:,1)$','$\widetilde{V}\widetilde{Q}(:,2)$','$\widetilde{V}\widetilde{Q}(:,3)$','$\widetilde{V}_0\widetilde{Q}_0(:,1)$', ...
-    '$\widetilde{V}_0\widetilde{Q}_0(:,2)$', ...
-    '$\widetilde{V}_0\widetilde{Q}_0(:,3)$', ...
-    'Interpreter','latex','FontSize',16)
+plot(x, V_tilde * Q_tilde(:,1), x, V_tilde_ref * Q_tilde_ref(:,1),'--');
+plot(x, V_tilde * Q_tilde(:,2), x, V_tilde_ref * Q_tilde_ref(:,2),'--');
+plot(x, V_tilde * Q_tilde(:,3), x, V_tilde_ref * Q_tilde_ref(:,3),'--');
 xlabel("Grid");
 ylabel("Basis vectors"), 
 
 title('First three columns: $\widetilde{V}\widetilde{Q}$ and $\widetilde{V}_0 \widetilde{Q}_0$','Interpreter','latex','FontSize',16)
-hold off;
-
-
+hold off
 %% Finite difference scheme to solve the BVP: -u'' + (p(x) + lambda)u = g(x), u'(0)=-1, u'(1)=0
 function [u] = LSL_FD(M,L,h,lambda)
     % Coefficient matrix A is M+1 x M+1
