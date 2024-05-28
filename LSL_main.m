@@ -207,8 +207,8 @@ plot(1:3,err,'-o', ...
     'MarkerSize',10, ...
      'MarkerEdgeColor','red' )
 %legend('$\kappa = e^{-5}$','$\kappa = e^{-4}$','$\kappa = e^{-3}$','Interpreter','latex','FontSize',16)
-xlabel('Condition number exponent'), ylabel('Error')
-title('$||p - p_r||_{2}$','Interpreter','latex','FontSize',16)
+xlabel('Desired condition numbers: $e^{-n}$, for $n=5,4,3$','Interpreter','latex','FontSize',16), ylabel('Error')
+title('$||p - \widetilde{p}||_{2}$','Interpreter','latex','FontSize',16)
 figure
 
 hold on
@@ -220,6 +220,9 @@ ylabel("Basis vectors"),
 
 title('First three columns: $\widetilde{V}\widetilde{Q}$ and $\widetilde{V}_0 \widetilde{Q}_0$','Interpreter','latex','FontSize',16)
 hold off
+
+%% Plot background and internal solutions
+
 %% Finite difference scheme to solve the BVP: -u'' + (p(x) + lambda)u = g(x), u'(0)=-1, u'(1)=0
 function [u] = LSL_FD(M,L,h,lambda)
     % Coefficient matrix A is M+1 x M+1
