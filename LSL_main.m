@@ -181,21 +181,36 @@ end
 
 %p_reconstructed = W\deltaF;
 [U,S,V] = svd(W,'econ');
+conditionNumbers = zeros(3,1);
+conditionNumbers(1) = 1.e-5;
+conditionNumbers(2) = 1.e-4;
+conditionNumbers(3) = 1.e-3;
 
-kappanew = 1.e-5; % Desired condition number
-r        = max(    find( diag(S) > max(    S(:)     ) * kappanew )     );
-invWtruncated = V(:,1:r) *  inv(S(1:r, 1:r)) * U(:,1:r)'; % Approximate 
-
-p_reconstructed = invWtruncated * deltaF;
-
-figure
-
-subplot(2,1,1)
+err = conditionNumbers*0;
+figure 
 hold on
 plot(x,p);
-plot(x,p_reconstructed,'--');
+for j = 1:3
+    r               = max(    find( diag(S) > max(    S(:)     ) * conditionNumbers(j) )     );
+    invWtruncated   = V(:,1:r) *  inv(S(1:r, 1:r)) * U(:,1:r)'; % Approximate 
+    p_reconstructed = invWtruncated * deltaF; 
+    err(j) = norm(p - p_reconstructed);
+    plot(x,p_reconstructed,'--');
+end
+xlabel("Grid");
+ylabel("Potentials"), 
+title("True and reconstructed potentials",'FontSize',16);
+legend('True','$\kappa = e^{-5}$','$\kappa = e^{-4}$','$\kappa = e^{-3}$','Interpreter','latex','FontSize',16)
 hold off
-subplot(2,1,2)
+figure
+plot(1:3,err,'-o', ...
+    'MarkerSize',10, ...
+     'MarkerEdgeColor','red' )
+%legend('$\kappa = e^{-5}$','$\kappa = e^{-4}$','$\kappa = e^{-3}$','Interpreter','latex','FontSize',16)
+xlabel('Condition number exponent'), ylabel('Error')
+title('$||p - p_r||_{2}$','Interpreter','latex','FontSize',16)
+figure
+
 hold on
 plot(x, V_tilde * Q_tilde(:,1), x, V_tilde_ref * Q_tilde_ref(:,1),'--');
 plot(x, V_tilde * Q_tilde(:,2), x, V_tilde_ref * Q_tilde_ref(:,2),'--');
