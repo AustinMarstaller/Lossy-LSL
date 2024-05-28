@@ -165,30 +165,36 @@ e1 = ones(length(b_tilde),1);
 e1(2:end) = 0;
 u_approx = zeros(length(x), l);
 
-for i = 1:l
+for i = 1:numel(lambda)
     u_approx(:,i) = sqrt(b_tilde' * M_inverse * b_tilde) * V_tilde_ref * Q_tilde_ref * inv(T_tilde + lambda(i)*eye(size(T_tilde))) * e1;
 end
 
 % Solve inverse problem F_0 - F_p = <u_approx, p u_ref>
 
-W       = zeros(l,length(x));
-deltaF  = zeros(l,1);
+W       = zeros(numel(lambda),length(x));
+deltaF  = zeros(numel(lambda),1);
 
-for j = 1:l
-    W(j,:)    = (   u_approx(:,j)  .*  u_lambda(:,j)   )'; % Each row corresponds to lambda = lambda_j
+for j = 1:numel(lambda)
+    W(j,:)    = (   u_approx(:,j)  .* diag(D) .*  u_lambda(:,j)   )'; % Each row corresponds to lambda = lambda_j
     deltaF(j) = (   F_reference(j) -            F(j)   );  % Real column vector with l components
 end
 
-p_reconstructed = W\deltaF;
-interpolant_points = find(p_reconstructed); % indices of nonzero values of reconstructed potential
-interpolant_values = p_reconstructed(interpolant_points); 
+%p_reconstructed = W\deltaF;
+[U,S,V] = svd(W,'econ');
 
-p_spline = spline(x(interpolant_points), interpolant_values, x);
+kappanew = 1.e-5; % Desired condition number
+r        = max(    find( diag(S) > max(    S(:)     ) * kappanew )     );
+invWtruncated = V(:,1:r) *  inv(S(1:r, 1:r)) * U(:,1:r)'; % Approximate 
+
+p_reconstructed = invWtruncated * deltaF;
 
 figure
 
-subplot(3,1,1)
-plot(x,p,x(interpolant_points),interpolant_values,'o');
+subplot(2,1,1)
+hold on
+plot(x,p);
+plot(x,p_reconstructed,'--');
+hold off
 subplot(2,1,2)
 hold on
 plot(x, V_tilde * Q_tilde(:,1), x, V_tilde_ref * Q_tilde_ref(:,1),'--');
