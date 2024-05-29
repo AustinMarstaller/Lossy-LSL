@@ -2,17 +2,16 @@ clear all
 close all
 tic
 %% Synthetic data construction
-M=255; % M+1 total grid points
+M=500; % M+1 total grid points previously 256
 h=1/M; % Grid point spacing. 
 x=(0:h:1)'; % Lattice in column vector
 
-mu          = 0.3;
-sigma       = 0.125;
-p           = exp(-(x-mu).^2 / sigma^2); % p = 0 for reference problem
+mu          = 0.22; 
+sigma       = 0.05; 
+gamma       = 0.74;
+p           = gamma*exp(-(x-mu).^2 / sigma^2); % p = 0 for reference problem
 p_reference = zeros(M+1,1);
-lambda      = [2,4,6,8,16,32,48];
-%lambda = [2,6,16,48];
-% Operator L = -Del + p
+lambda      = [2,4,8,16,32,48]; 
 
 L_diag   = 2/h^2 * eye(M+1,M+1) + diag(p);
 L        = spdiags([-1/h^2 0 -1/h^2],-1:1,M+1,M+1) + L_diag;
@@ -96,7 +95,7 @@ end
 V           = u_lambda;
 V_ref       = u_lambda_reference;
 
-threshold = 10^(-12);
+threshold = 5.e-12; 
 
 [X,eig_values]          = eig(Mass);
 [X_ref, eig_values_ref] = eig(Mass_reference);
@@ -182,33 +181,47 @@ end
 %p_reconstructed = W\deltaF;
 [U,S,V] = svd(W,'econ');
 conditionNumbers = zeros(3,1);
-conditionNumbers(1) = 1.e-5;
-conditionNumbers(2) = 1.e-4;
-conditionNumbers(3) = 1.e-3;
+conditionNumbers(1) = 6.e-5; 
+conditionNumbers(2) = 6.e-4;
+conditionNumbers(3) = 6.e-3;
 
-err = conditionNumbers*0;
+err = zeros(1,4);
 figure 
+subplot(2,1,1)
 hold on
 plot(x,p);
+
+invWtruncated   = V *  inv(S) * U';
+p_reconstructed = invWtruncated * deltaF;
+err(1)          = norm(p - p_reconstructed);
+
+plot(x,p_reconstructed,'--');
 for j = 1:3
     r               = max(    find( diag(S) > max(    S(:)     ) * conditionNumbers(j) )     );
     invWtruncated   = V(:,1:r) *  inv(S(1:r, 1:r)) * U(:,1:r)'; % Approximate 
     p_reconstructed = invWtruncated * deltaF; 
-    err(j) = norm(p - p_reconstructed);
+    err(j+1) = norm(p - p_reconstructed);
     plot(x,p_reconstructed,'--');
 end
 xlabel("Grid");
 ylabel("Potentials"), 
 title("True and reconstructed potentials",'FontSize',16);
-legend('True','$\kappa = e^{-5}$','$\kappa = e^{-4}$','$\kappa = e^{-3}$','Interpreter','latex','FontSize',16)
+subtitle("\gamma = "+gamma+", \sigma="+sigma+", \mu="+mu,'FontSize',16);
+legend('True','Unmodified $\kappa$','$\kappa = 6e^{-5}$','$\kappa = 6e^{-4}$','$\kappa = 6e^{-3}$','Interpreter','latex','FontSize',16)
 hold off
-figure
-plot(1:3,err,'-o', ...
+
+
+subplot(2,1,2)
+plot(1:4,err,'-o', ...
     'MarkerSize',10, ...
      'MarkerEdgeColor','red' )
 %legend('$\kappa = e^{-5}$','$\kappa = e^{-4}$','$\kappa = e^{-3}$','Interpreter','latex','FontSize',16)
-xlabel('Desired condition numbers: $e^{-n}$, for $n=5,4,3$','Interpreter','latex','FontSize',16), ylabel('Error')
-title('$||p - \widetilde{p}||_{2}$','Interpreter','latex','FontSize',16)
+xlabel('Unmodified $\kappa$ and modified $\kappa$: $6e^{-n}$, for $n=5,4,3$','Interpreter','latex','FontSize',16), ylabel('Error')
+title('$L_2$ norm error for varying condition number $\kappa$','Interpreter','latex','FontSize',16)
+subtitle('$||p - \widetilde{p}||_{2}$','Interpreter','latex','FontSize',16)
+
+
+%{
 figure
 
 hold on
@@ -220,6 +233,12 @@ ylabel("Basis vectors"),
 
 title('First three columns: $\widetilde{V}\widetilde{Q}$ and $\widetilde{V}_0 \widetilde{Q}_0$','Interpreter','latex','FontSize',16)
 hold off
+%% Plot singular values
+figure
+semilogy(diag(S),'-ok','LineWidth',1.5), hold on, grid on
+semilogy(   diag(S(1:r,1:r)), 'or','LineWidth',1.5   )
+%}
+
 
 %% Plot background and internal solutions
 
