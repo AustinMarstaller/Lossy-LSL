@@ -3,31 +3,43 @@ close all
 tic
 
 %% PARAMETERS
-number_of_mu        = 10;
+number_of_mu        =10;
 condNumber_fineness = 20;
 max_lambda_density  = 6;
 
 mu = zeros(1,number_of_mu);
 errors_per_lambda_density = zeros(max_lambda_density,condNumber_fineness+1);
 
-% construct the values of mu
-for j = 1:number_of_mu
-    mu(j) = (j-1)^2 * (2 * pi)^2; % Weyl's eigenvalue dist. law
-end
-wavelength = 2*pi / sqrt(mu(end)); 
-h          = wavelength/20; % Grid point spacing is 20x smaller than wavelength  
-x          = (0:h:1)'; % Lattice in column vector   
- 
-% 3D Matrix: rows = truncation index, cols = reconstructed potentia
-% pages = values of lambda density
-reconstructedPotentials = zeros(condNumber_fineness+1,length(x),max_lambda_density);
-
 for number_of_lambda = 1:max_lambda_density
-    % construct the values of mu
-    [lambda,mu] = lambda_construction(number_of_lambda, mu, number_of_mu);
-
     sprintf("Simulation λ density = %0.2f",number_of_lambda)
-    [errors_per_lambda_density(number_of_lambda,:), p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_lambda, condNumber_fineness,reconstructedPotentials);
+    % construct the values of mu
+    for j = 1:number_of_mu
+        mu(j) = (j-1)^2 * (2 * pi)^2; % Weyl's eigenvalue dist. law
+    end
+
+    % calculate the values of lambda and construct the lambda vector
+    for k = 1:number_of_mu-1
+        temp = linspace(mu(k),mu(k+1), number_of_lambda+2);
+        if k==1
+            lambda = temp(2:width( temp ) - 1 );
+        end
+        if k>1
+            lambda = cat(2,lambda,temp(2:width( temp ) - 1 ) );
+        end
+    end
+
+    lambda     = -1*flip(lambda);
+    %display(lambda)
+    wavelength = 2*pi / sqrt(mu(end)); 
+    h = wavelength/20; % Grid point spacing is 20x smaller than wavelength  
+    x=(0:h:1)'; % Lattice in column vector
+
+    %lambda_positive = [2, 4, 8, 16, 32, 48];
+    errors_per_lambda_density(number_of_lambda,:) = main(lambda, wavelength, h, x, number_of_lambda, condNumber_fineness);
+  
+
+    %filename = sprintf("%0.2f_lambdas.mat",number_of_lambda);
+   % save(filename)
 end
 
 figure 
@@ -37,29 +49,13 @@ for j = 1:max_lambda_density
 end
 title("Error per λ density")
 subtitle('$\log(||p - \widetilde{p}||_{2})$','Interpreter','latex')
-xlabel("Desired condition numbers: logspace(-12, -5,  cond Number fineness)");
+xlabel("Desired condition numbers: linspace(6.e-12,6.e-5,  cond Number fineness)");
 legend show
 hold off
 
-figure 
-
-%% Plot True potential and reconstructed potential
-% Pick the truncation number of SVD to examine Reconstruction at
-truncation_number = 11;
-
-% Pick the lambda density to examine Reconstruction at
-lambda_density_to_examine = 4;
-hold on
-plot(x,p,"-",'DisplayName',"True");
-plot(x,reconstructedPotentials(truncation_number,:,lambda_density_to_examine),"--",'DisplayName',"Reconstructed ");
-xlabel("GRID");
-title("Lambda density: "+lambda_density_to_examine+" at truncation number = "+truncation_number);
-subtitle("True potential w/ height = "+gamma)
-legend show;
-hold off
-function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_lambda,condNumber_fineness,reconstructedPotentials)
+function [err] = main(lambda, wavelength, h, x, number_of_lambda,condNumber_fineness)
     sigma       = 0.05; 
-    gamma       = 0.75; % default 0.75
+    gamma       = 0.05;
     p           = gamma*exp(-(x-0.2).^2 / sigma^2); % p = 0 for reference problem
     p_reference = zeros(length(x),1);
     
@@ -142,11 +138,13 @@ function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_
         end
     end
     
+    %{
+    
     %% Lanczos algorithm & truncated ROM    
     V           = u_lambda;
     V_ref       = u_lambda_reference;
     
-    threshold = 5.e-10; % change to different threshold. 
+    threshold = 5.e-12; % change to different threshold. 
     
     [X,eig_values]          = eig(Mass);
     [X_ref, eig_values_ref] = eig(Mass_reference);
@@ -186,10 +184,10 @@ function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_
     M_tilde = Z' * Mass * Z;
     S_tilde = Z' * Stiffness * Z; 
     
-    V_tilde_ref = V_ref * Z;
+    V_tilde_ref = V_ref * Z_ref;
     M_tilde_ref = Z' * Mass_reference * Z;   
-    S_tilde_ref = Z' * Stiffness_reference * Z;
-
+    S_tilde_ref = Z_ref' * Stiffness_reference * Z_ref; 
+    
     M_inverse = inv(M_tilde);
     A_tilde         = M_inverse*S_tilde;
     b_tilde         = Z'*b;  
@@ -198,18 +196,21 @@ function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_
     
     M_inverse_ref           = inv(M_tilde_ref);
     A_tilde_ref             = M_inverse_ref*S_tilde_ref;
-    b_tilde_ref             = Z'*b_ref;  
+    b_tilde_ref             = Z_ref'*b_ref;  
     [row_ref col_ref] = size(M_tilde_ref);
     m_ref             = col_ref;
     
     [Q_tilde_ref,alpha_tilde_ref,beta_tilde_ref] = Lanczos(A_tilde_ref,M_tilde_ref,M_inverse_ref,b_tilde_ref,m_ref); % Perform Lanczos for change of basis: VQ
     
     [Q_tilde,alpha_tilde,beta_tilde] = Lanczos(A_tilde,M_tilde,M_inverse,b_tilde,m); % Perform Lanczos for change of basis: VQ
-
+    
+    
+    
     %% Lippman-Schwinger formulation 
     
     % Eq (3.8): u ~= sqrt(b^T inv(M) b) V_0 Q_0 (T+ lambda * Id)^-1 e_1
     T_tilde = diag(beta_tilde(1:end-1),-1) + diag(alpha_tilde,0) + diag(beta_tilde(1:end-1),1);
+    T_tilde_ref = diag(beta_tilde_ref(1:end-1),-1) + diag(alpha_tilde_ref,0) + diag(beta_tilde_ref(1:end-1),1);
     
     e1 = ones(length(b_tilde),1);
     e1(2:end) = 0;
@@ -219,52 +220,102 @@ function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_
         u_approx(:,i) = sqrt(b_tilde' * M_inverse * b_tilde) * V_tilde_ref * Q_tilde_ref * inv(T_tilde + lambda(i)*eye(size(T_tilde))) * e1;
     end
     
+    %}
     % Solve inverse problem F_0 - F_p = <u_approx, p u_ref>
+    
     W       = zeros(numel(lambda),length(x));
     deltaF  = zeros(numel(lambda),1);
     
-    %{
-    % BORN
-    for j = 1:numel(lambda)
-        W(j,:)    = (   u_lambda_reference(:,j)   .* diag(D) .*  u_lambda_reference(:,j)   )'; % Each row corresponds to lambda = lambda_j
-        deltaF(j) = (   F_reference(j) -            F(j)   );  % Real column vector with l components
-    end
-    %}
     
-    % ROM METHOD
+    % Using exact solution to test negative lambda: F_0 - F_p = <u_lambda, p u_reference>
     for j = 1:numel(lambda)
-        W(j,:)    = (   u_approx(:,j)  .* diag(D) .*  u_lambda_reference(:,j)  )'; % Each row corresponds to lambda = lambda_j
+        W(j,:)    = (   u_lambda(:,j)  .* diag(D) .*  u_lambda_reference(:,j)   )'; % Each row corresponds to lambda = lambda_j
         deltaF(j) = (   F_reference(j) -            F(j)   );  % Real column vector with l components
     end
-        
+    
+    
+    %{
+    % UNCOMMENT FOR PROPER ROM METHOD
+    for j = 1:numel(lambda)
+        W(j,:)    = (   u_approx(:,j)  .* diag(D) .*  u_lambda(:,j)   )'; % Each row corresponds to lambda = lambda_j
+        deltaF(j) = (   F_reference(j) -            F(j)   );  % Real column vector with l components
+    end
+    
+    %}
     %p_reconstructed = W\deltaF;
     [U,S,V] = svd(W,'econ');
+    %conditionNumbers = zeros(3,1);
     %% Mitigate large condition number
     % Truncate the SVD: min singular value increases
 
-    desiredCondNumber = logspace(-12,-5,condNumber_fineness);
+    desiredCondNumber = linspace(6.e-12,6.e-5,condNumber_fineness);
     desiredCondNumber = flip(desiredCondNumber);
-
+    %desiredCondNumber = [6.e-7,6.e-8,6.e-9,6.e-10,6.e-11,6.e-12];
     invWtruncated     = V *  inv(S) * U';
     p_reconstructed   = invWtruncated * deltaF;
     err               = zeros(1,width(desiredCondNumber)+1); 
-
-    reconstructedPotentials(1,:,number_of_lambda) = p_reconstructed; 
- 
+    figure 
+    hold on
+    plot(x,p,'DisplayName',sprintf("True")); % Plot true potential p
+    
     err(1)          = norm(p - p_reconstructed);
     
+    %plot(x,p_reconstructed,'--');
     for j = 1:width(desiredCondNumber)
         r               = max(    find( diag(S) > max(    S(:)     ) * desiredCondNumber(j) )     );
         if isempty(r) == 0
             invWtruncated   = V(:,1:r) *  inv(S(1:r, 1:r)) * U(:,1:r)'; % Approximate 
-            p_reconstructed = invWtruncated * deltaF;
-            
-            reconstructedPotentials(j+1,:,number_of_lambda) = p_reconstructed; 
-
+            p_reconstructed = invWtruncated * deltaF; 
             err(j+1) = norm(p - p_reconstructed);
+            plot(x,p_reconstructed,'--','DisplayName',sprintf("condDesired = %0.5g, cond(S(1:r,1:r)) = %0.5g, r = %0.2f",desiredCondNumber(j),cond(S(1:r,1:r)), r));
         end
     end
-
+    xlabel("Grid");
+    ylabel("Potentials"), 
+    legend show;
+    title("Potentials")
+    subtitle(sprintf("μ/λ = 2/%0.2f", number_of_lambda))
+    %title(sprintf("\\lambda"));
+    %subtitle("\gamma = "+gamma+", \sigma="+sigma+", \mu="+mu+", \lambda_M="+threshold,'FontSize',16);
+    %legend('True','$\kappa = 6e^{-5}$','$\kappa = 6e^{-4}$','$\kappa = 6e^{-3}$','Interpreter','latex','FontSize',16)
+    hold off
+    %saveas(gcf,sprintf("%0.2f_lambdas_truncations.png",number_of_lambda));
+    %saveas(gcf, sprintf("images/delta_%0.2f_alpha_pinning_gamma_%0.2f.png",delta,gamma_list(g)))
+    %{
+    figure
+    plot(1:width(desiredCondNumber)+1,err(1),'-o', 'MarkerSize',10, 'MarkerEdgeColor','red','DisplayName',sprintf("No truncation"));
+    hold on
+    for j=1:width(desiredCondNumber)
+        plot(1:width(desiredCondNumber)+1,err(j),'-o', 'MarkerSize',10, 'MarkerEdgeColor','red','DisplayName',sprintf("truncation r = %0.2f",r));
+    end
+    %plot(1:width(err), log(err),'-o', 'MarkerSize',10, 'MarkerEdgeColor','red' );
+    title('$\log(||p - \widetilde{p}||_{2})$','Interpreter','latex')
+    subtitle(sprintf("μ/λ = 2/%0.2f", number_of_lambda))
+    legend show
+    hold off
+    %}
+    %{
+    %% Plot background and internal solutions
+    index = find(lambda > 0);
+    index = index(1);
+    
+    figure
+    for i = 1:index
+        plot(x,u_lambda(:,i));
+        hold on 
+        plot(x,u_lambda_reference(:,i))
+        plot(x,u_approx(:,i),'--')
+        
+        
+        xlabel("Grid");
+        ylabel("Solutions"),
+        title(sprintf('\\lambda = %0.2f',lambda(i)))
+        legend('Forward solved','$p = 0$','Eq $3.8$','Interpreter','latex','FontSize',16)
+        
+        hold off
+    end
+    %exportgraphics(gcf,'solutions.png','ContentType','vector');
+    %}
     %% Finite difference scheme to solve the BVP: -u'' + (p(x) + lambda)u = g(x), u'(0)=-1, u'(1)=0
     function [u] = LSL_FD(M,L,h,lambda)
         % Coefficient matrix A is M+1 x M+1
