@@ -8,7 +8,8 @@ condNumber_fineness = 20;
 max_lambda_density  = 6;
 
 mu = zeros(1,number_of_mu);
-errors_per_lambda_density = zeros(max_lambda_density,condNumber_fineness+1);
+errors_per_lambda_density_BORN = zeros(max_lambda_density,condNumber_fineness+1);
+errors_per_lambda_density_MAIN = zeros(max_lambda_density,condNumber_fineness+1);
 
 % construct the values of mu
 for j = 1:number_of_mu
@@ -20,46 +21,78 @@ x          = (0:h:1)'; % Lattice in column vector
  
 % 3D Matrix: rows = truncation index, cols = reconstructed potentia
 % pages = values of lambda density
-reconstructedPotentials = zeros(condNumber_fineness+1,length(x),max_lambda_density);
+reconstructedPotentials_MAIN = zeros(condNumber_fineness+1,length(x),max_lambda_density);
+reconstructedPotentials_BORN = zeros(condNumber_fineness+1,length(x),max_lambda_density);
 
-for number_of_lambda = 1:max_lambda_density
-    % construct the values of mu
-    [lambda,mu] = lambda_construction(number_of_lambda, mu, number_of_mu);
+    for number_of_lambda = 1:max_lambda_density
+        % construct the values of mu
+        [lambda,mu] = lambda_construction(number_of_lambda, mu, number_of_mu);
 
-    sprintf("Simulation λ density = %0.2f",number_of_lambda)
-    [errors_per_lambda_density(number_of_lambda,:), p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_lambda, condNumber_fineness,reconstructedPotentials);
-end
+        sprintf("Simulation λ density = %0.2f",number_of_lambda)
+        
+        [errors_per_lambda_density_MAIN(number_of_lambda,:), p, reconstructedPotentials_MAIN,gamma] = main(lambda, h, x, number_of_lambda, condNumber_fineness,reconstructedPotentials_MAIN);
+
+        [errors_per_lambda_density_BORN(number_of_lambda,:), p, reconstructedPotentials_BORN,gamma] = LSL_BORN(lambda, h, x, number_of_lambda, condNumber_fineness,reconstructedPotentials_BORN);
+
+    end
+
 
 figure 
 hold on
 for j = 1:max_lambda_density
-    plot(1:condNumber_fineness+1, log(errors_per_lambda_density(j,:)),'-o','DisplayName',sprintf("# of λ = %0.2f",j))
+    plot(1:condNumber_fineness+1, log(errors_per_lambda_density_BORN(j,:)),'-o','DisplayName',sprintf("# of λ = %0.2f",j))
 end
-title("Error per λ density")
+title("(Born version) Error per λ density with \gamma = "+gamma)
 subtitle('$\log(||p - \widetilde{p}||_{2})$','Interpreter','latex')
 xlabel("Desired condition numbers: logspace(-12, -5,  cond Number fineness)");
 legend show
 hold off
+filename = sprintf("Born_Error_gamma%0.2f.png",gamma);
+saveas(gcf,filename);
+
+figure 
+hold on
+for j = 1:max_lambda_density
+    plot(1:condNumber_fineness+1, log(errors_per_lambda_density_MAIN(j,:)),'-o','DisplayName',sprintf("# of λ = %0.2f",j))
+end
+title("(Main version) Error per λ density with \gamma = "+gamma)
+subtitle('$\log(||p - \widetilde{p}||_{2})$','Interpreter','latex')
+xlabel("Desired condition numbers: logspace(-12, -5,  cond Number fineness)");
+legend show
+hold off
+filename = sprintf("Main_Error_gamma%0.2f.png",gamma);
+saveas(gcf,filename);
 
 figure 
 
 %% Plot True potential and reconstructed potential
+
 % Pick the truncation number of SVD to examine Reconstruction at
 truncation_number = 11;
 
 % Pick the lambda density to examine Reconstruction at
-lambda_density_to_examine = 4;
+
 hold on
-plot(x,p,"-",'DisplayName',"True");
-plot(x,reconstructedPotentials(truncation_number,:,lambda_density_to_examine),"--",'DisplayName',"Reconstructed ");
+plot(x,p,"-",'DisplayName',"True",'LineWidth',2.0,'Color','white');
+for density = 3:4
+    plot(x,reconstructedPotentials_BORN(truncation_number,:,density),"--",'DisplayName',"Born, density = "+density);
+    plot(x,reconstructedPotentials_MAIN(truncation_number,:,density),"-",'DisplayName',"Main, density = "+density);
+
+end
 xlabel("GRID");
-title("Lambda density: "+lambda_density_to_examine+" at truncation number = "+truncation_number);
+title("Lambda density 3,4,5,6 at SVD truncation number = "+truncation_number);
 subtitle("True potential w/ height = "+gamma)
 legend show;
+ylim([-0.5 1.2])
+
+filename = sprintf("Potentials_gamma%0.2f.png",gamma);
+saveas(gcf,filename);
 hold off
+
+
 function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_lambda,condNumber_fineness,reconstructedPotentials)
     sigma       = 0.05; 
-    gamma       = 0.75; % default 0.75
+    gamma       = 1; % default 0.75
     p           = gamma*exp(-(x-0.2).^2 / sigma^2); % p = 0 for reference problem
     p_reference = zeros(length(x),1);
     
