@@ -19,7 +19,7 @@ wavelength = 2*pi / sqrt(mu(end));
 h          = wavelength/20; % Grid point spacing is 20x smaller than wavelength  
 x          = (0:h:1)'; % Lattice in column vector   
  
-% 3D Matrix: rows = truncation index, cols = reconstructed potentia
+% 3D Matrix: rows = truncation index, cols = reconstructed potential
 % pages = values of lambda density
 reconstructedPotentials_MAIN = zeros(condNumber_fineness+1,length(x),max_lambda_density);
 reconstructedPotentials_BORN = zeros(condNumber_fineness+1,length(x),max_lambda_density);
@@ -83,7 +83,7 @@ xlabel("GRID");
 title("Lambda density 3,4,5,6 at SVD truncation number = "+truncation_number);
 subtitle("True potential w/ height = "+gamma)
 legend show;
-ylim([-0.5 1.2])
+ylim([-5 25.5])
 
 filename = sprintf("Potentials_gamma%0.2f.png",gamma);
 saveas(gcf,filename);
@@ -92,7 +92,7 @@ hold off
 
 function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_lambda,condNumber_fineness,reconstructedPotentials)
     sigma       = 0.05; 
-    gamma       = 1; % default 0.75
+    gamma       = 25; % default 0.75
     p           = gamma*exp(-(x-0.2).^2 / sigma^2); % p = 0 for reference problem
     p_reference = zeros(length(x),1);
     
