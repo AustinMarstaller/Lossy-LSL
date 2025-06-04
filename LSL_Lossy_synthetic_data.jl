@@ -31,7 +31,7 @@ function forward_solver(x,h,α,p,λ)
    D      = spdiagm(zeros(length(x)));
    D[1,1] = α*(2/h);
 
-   A = -C + im*ω*D - λ*I;
+   A = -C + im*ω*D - λ*I; # λ := -ω²
 
    f     = zeros(length(x),1);
    f[1]  = 2/h;
@@ -41,6 +41,8 @@ function forward_solver(x,h,α,p,λ)
    v = vec(v)
    
    function benchmark_plotting(x,λ,v)
+    # Visually compare the exact and approximate solutions
+
     fig = Figure(;
         figure_padding=(5,5,10,10),
         backgroundcolor=:snow2,
@@ -63,9 +65,8 @@ function forward_solver(x,h,α,p,λ)
 
      #axislegend("legend"; position=:rt)    
     save("benchmark_plot_test.png",fig)
-end
-
-   benchmark_plotting(x,λ,v)
-   
+   end
+   #benchmark_plotting(x,λ,v)
+ 
    return v
 end

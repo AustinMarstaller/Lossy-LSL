@@ -20,7 +20,6 @@ function lambda_construction(number_of_lambda::Int64, number_of_mu::Int64)
         temp = LinRange(μ[k],μ[k+1], number_of_lambda+2);
         λ = hcat(λ,temp[2:length( temp ) - 1 ]);
     end
-#lambda     = -1*flip(lambda); # legacy. why were the lambda values changed to be negative originally?
 
 return vec(-λ),vec(μ) 
 end
