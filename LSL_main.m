@@ -23,7 +23,10 @@ x          = (0:h:1)'; % Lattice in column vector
 % pages = values of lambda density
 reconstructedPotentials_MAIN = zeros(condNumber_fineness+1,length(x),max_lambda_density);
 reconstructedPotentials_BORN = zeros(condNumber_fineness+1,length(x),max_lambda_density);
-
+number_of_lambda=1;
+[lambda,mu] = lambda_construction(number_of_lambda, mu, number_of_mu);
+lambda_value = lambda(end);
+%{
     for number_of_lambda = 1:max_lambda_density
         % construct the values of mu
         [lambda,mu] = lambda_construction(number_of_lambda, mu, number_of_mu);
@@ -35,7 +38,7 @@ reconstructedPotentials_BORN = zeros(condNumber_fineness+1,length(x),max_lambda_
         [errors_per_lambda_density_BORN(number_of_lambda,:), p, reconstructedPotentials_BORN,gamma] = LSL_BORN(lambda, h, x, number_of_lambda, condNumber_fineness,reconstructedPotentials_BORN);
 
     end
-
+%}
 
 figure 
 hold on
