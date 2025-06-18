@@ -26,5 +26,6 @@ function [lambda, mu] = lambda_construction(number_of_lambda, number_of_mu)
             end
         end
 
-   lambda     = -1*flip(lambda);
+   %lambda     = -1*flip(lambda);
+   lambda = -1*lambda; 
 end

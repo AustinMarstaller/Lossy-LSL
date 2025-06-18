@@ -1,9 +1,8 @@
 % MAIN ROM FILE
 %
 % 
-clear all
+%
 close all
-
 %% PARAMETER GENERATION
  number_of_mu        = 10;
  condNumber_fineness = 20;
