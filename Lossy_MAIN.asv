@@ -3,7 +3,6 @@
 % 
 %
 close all
-clear all
 %% PARAMETER GENERATION
  number_of_mu        = 10;
  condNumber_fineness = 20;
@@ -22,26 +21,14 @@ x          = (0:h:1)'; % Lattice in column vector
 p           = gamma*exp(-(x-0.2).^2 / sigma^2); % p = 0 for reference problem
 p_reference = 0*p;
 
-
-
 %% SYNTHETIC DATA GENERATION
 v_per_frequency.gaussian_potential = zeros(length(x), length(lambda));
 u_per_frequency.gaussian_potential = zeros(2*length(x), length(lambda));
 
-   C                        = spdiags([-1/h^2, 2/h^2, -1/h^2],-1:1,length(x),length(x)) + diag(p); 
-   C(1,2)                   = -2/h^2;
-   C(length(x),length(x)-1) = -2/h^2; 
+   C                      = spdiags([-1/h^2, 2/h^2, -1/h^2],-1:1,length(x),length(x)) + diag(p); 
+   C(1,1)                 = 1/h^2 + p(1);
+   C(length(x),length(x)) = 1/h^2 + p(length(x));
 
-   % C and D are symmetrix w.r.t the finite-difference operator X = diag(2/h^2, 1/h^2, ..., 1/h^2, 2/h^2)
-   X = eye(length(x));
-   X = (1/h^(2)) * X;
-   X(1,1)                 = 2/h^2;
-   X(length(x),length(x)) = 2/h^2;
-
-   % Redefine C to be symmetric?
-   % inv(X) * C is also symmetric...why not use this one?
-   C = inv(sqrtm(X)) * C * sqrtm(X);
-   
    L = chol(C); % C = L^T L
 
    D      = zeros(length(x),length(x));
@@ -69,16 +56,13 @@ for j = 1:length(lambda)
    v_per_frequency.gaussian_potential(:,j) = v;
    u_per_frequency.gaussian_potential(:,j) = [(1i/omega) * L * v; v];
 
-   %{
-   % visualize forward solver
+   % visualize benchmark figure
    figure
    hold on
-   plot(x,abs(exact_solution).^2,'LineWidth',3,'Color',"blue")
-   plot(x,abs(v).^2,'--','LineWidth',3,'Color',"red")
-
+   plot(x,abs(v).^2,'--')
+   plot(x,abs(exact_solution).^2,'LineWidth',3)
    title("Benchmark with \lambda = "+lambda(j))
-   legend('Dashed: approximate','Solid: exact')
-   %}
+   legend()
 end
 %% Construct matrices
 % First-order from Au - i omega u = b

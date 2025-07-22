@@ -120,10 +120,7 @@ function [err, p, reconstructedPotentials,gamma] = main(lambda, h, x, number_of_
         [u_lambda_reference(:,j)] = LSL_FD(length(x)-1,L_ref,h,lambda(j));
     end
     
-    D      = ones(1,length(x))*h;
-    D(1)   = h/2;
-    D(end) = h/2;
-    D      = diag(D);
+a
     
     %% Synthetic data F(lambda) = u(0,lambda), dF/dlambda = u^T u
     F           = u_lambda(1,:)'; % u(0, lambda_i)
