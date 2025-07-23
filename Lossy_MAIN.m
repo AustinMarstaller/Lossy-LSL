@@ -25,8 +25,9 @@ p_reference = 0*p;
 
 
 %% SYNTHETIC DATA GENERATION
-v_per_frequency.gaussian_potential = zeros(length(x), length(lambda));
-u_per_frequency.gaussian_potential = zeros(2*length(x), length(lambda));
+   v_per_frequency.gaussian_potential = zeros(length(x), length(lambda));
+   u_per_frequency.gaussian_potential = zeros(2*length(x), length(lambda));
+   b_per_frequency.gaussian_potential = 0*u_per_frequency.gaussian_potential;
 
    C                        = spdiags([-1/h^2, 2/h^2, -1/h^2],-1:1,length(x),length(x)) + diag(p); 
    C(1,2)                   = -2/h^2;
@@ -38,8 +39,7 @@ u_per_frequency.gaussian_potential = zeros(2*length(x), length(lambda));
    X(1,1)                 = 2/h^2;
    X(length(x),length(x)) = 2/h^2;
 
-   % Redefine C to be symmetric?
-   % inv(X) * C is also symmetric...why not use this one?
+   % Similiarity transfrom for C: C = X^{-1/2} C X^{1/2}. It's SPD now
    C = inv(sqrtm(X)) * C * sqrtm(X);
    
    L = chol(C); % C = L^T L
@@ -47,8 +47,10 @@ u_per_frequency.gaussian_potential = zeros(2*length(x), length(lambda));
    D      = zeros(length(x),length(x));
    D(1,1) = alpha*(2/h);
 
-   f     = zeros(length(x),1);
-   f(1)  = 2/h;
+   A = zeros(2*length(x),2*length(x));
+   A( (length(x)+1):2*length(x), 1:length(x) )             = -L;
+   A( 1:length(x), 1:length(x) )                           = L';
+   A((length(x)+1):2*length(x), (length(x)+1):2*length(x)) = D;
 
 for j = 1:length(lambda)
     % For every λᵢ ∈ λ::Vector, generate the synthetic data via the Finite Difference scheme
@@ -68,6 +70,7 @@ for j = 1:length(lambda)
    v = (-C + 1i*omega*D - lambda(j)*eye(length(x)) )\f;
    v_per_frequency.gaussian_potential(:,j) = v;
    u_per_frequency.gaussian_potential(:,j) = [(1i/omega) * L * v; v];
+   b_per_frequency.gaussian_potential(:,j) = [zeros(length(L * v),1); (-1i/omega) * (2/h)];
 
    %{
    % visualize forward solver
@@ -80,38 +83,5 @@ for j = 1:length(lambda)
    legend('Dashed: approximate','Solid: exact')
    %}
 end
-%% Construct matrices
-% First-order from Au - i omega u = b
-
-% C = L^T L
-% A = [0 -L; L' D]
-A = zeros(2*length(x),2*length(x));
-A( (length(x)+1):2*length(x), 1:length(x) )             = -L;
-A( 1:length(x), 1:length(x) )                           = L';
-A((length(x)+1):2*length(x), (length(x)+1):2*length(x)) = D;
-
-% w = i/omega L v
-w = (1i)/(omega) * L * v;
-
-% u = (w; v)
-u = [w;v];
-
-% b = (0; (-i/omega) * g), where  g = delta(x) is the source for every
-% k= 1,...,K equation.
-g      = zeros(length(x),1);
-g(1,1) = 2/h; 
-
-b                            = zeros(2*length(x),1);
-b(length(x)+1:2*length(x),1) = (-1i/omega)*g;
-
-% data
 
 
-% The inner-product is symmetric w.r.t the matrix X
-% Why is there this relation between the numerical scheme and the symmetry?
-X      = ones(1,length(x))*h;
-X(1)   = h/2;
-X(end) = h/2;
-X      = diag(X);
-
-%% ROM
