@@ -14,6 +14,7 @@ function [v,C,D] = Lossy_synthetic_data(x,h,alpha,p,lambda)
    % solution corresponding to p=0 scenario
    exact_solution = c1*exp(1i*omega*x) + c2*exp(-1i*omega*x);
 
+   % o8/05: the signs for C are wrong i think
    C                        = spdiags([1/h^2, 2/h^2, 1/h^2],-1:1,length(x),length(x)) + diag(p); 
    C(1,2)                   = 2/h^2;
    C(length(x),length(x)-1) = 2/h^2;   
